@@ -1,4 +1,6 @@
 (ns me.panzoo.watcher
+  "A clojureish wrapper round the Watch Service API as implemented in
+  [jpathwatch](http://jpathwatch.wordpress.com)."
   (:use
     [clojure.string :only (join)]
     [clojure.core.incubator :only (dissoc-in)])
@@ -9,13 +11,14 @@
      StandardWatchEventKind]
     [name.pachler.nio.file.ext ExtendedWatchEventModifier]))
 
-(def ENTRY_CREATE StandardWatchEventKind/ENTRY_CREATE)
-(def ENTRY_DELETE StandardWatchEventKind/ENTRY_DELETE)
-(def ENTRY_MODIFY StandardWatchEventKind/ENTRY_MODIFY)
+(def ^:private ENTRY_CREATE StandardWatchEventKind/ENTRY_CREATE)
+(def ^:private ENTRY_DELETE StandardWatchEventKind/ENTRY_DELETE)
+(def ^:private ENTRY_MODIFY StandardWatchEventKind/ENTRY_MODIFY)
 
 (def ^:private event-kinds
   (into-array [ENTRY_CREATE ENTRY_DELETE ENTRY_MODIFY]))
 
+;; Does ACCURATE make a difference on Linux?
 (def ^:private event-modifiers
   (into-array [ExtendedWatchEventModifier/ACCURATE]))
 
@@ -38,9 +41,12 @@
           :when (.isDirectory p)]
     (watch-path-single w (.getPath p))))
 
-(defn watch-path [w path]
-  ((if (:recursive? w) watch-path-recursive watch-path-single)
-     w path))
+(defn watch-path
+  "Register `path` with `watcher`. If `watcher` is recursive and `path` is a
+  directory, all subdirectories will be registered too."
+  [watcher path]
+  ((if (:recursive? watcher) watch-path-recursive watch-path-single)
+     watcher path))
 
 (defn- unwatch-path-single [{:keys [pathmap keytree]} path]
   (let [pieces (path-pieces path)
@@ -60,11 +66,17 @@
     (swap! pathmap #(apply dissoc % wkeys))
     (swap! keytree #(dissoc-in % pieces))))
 
-(defn unwatch-path [w path]
-  ((if (:recursive? w) unwatch-path-recursive unwatch-path-single)
-     w path))
+(defn unwatch-path
+  "Unregister `path` with `watcher`. If `watcher` is recursive and `path`
+  is a directory, all subdirectories will be unregistered too."
+  [watcher path]
+  ((if (:recursive? watcher) unwatch-path-recursive unwatch-path-single)
+     watcher path))
 
 (defn watcher [paths & opts]
+  "Create a watcher and register `paths` with it. `opts` is a sequence and
+  `:recursive` is the only option to date; if it is present, registration and
+  unregistration of directories is recursive."
   (let [w {:service (.newWatchService (FileSystems/getDefault))
            :recursive? (:recursive (set opts))
            :pathmap (atom nil)
@@ -103,11 +115,32 @@
         (unwatch-path w (:path e)))
       evts*)))
 
-(defn with-watcher [w fun]
-  (loop [evts (events w)]
+(defn with-watcher
+  "Wait for events from `watcher` and call `fun` with them.
+
+  `fun`: a function with a single argument of a sequence of events.
+
+  Events are maps. Path events have the following key-value pairs:
+
+  `:kind` one of `:create` `:delete` `:modify`
+
+  `:directory?` a boolean (always false when `:kind` is `:delete`)
+
+  `:path` a string
+
+  All other events are simply `{:kind :unknown}`."
+  [watcher fun]
+  (loop [evts (events watcher)]
     (when (seq evts)
       (fun evts))
-    (recur (events w))))
+    (recur (events watcher))))
 
-(defn with-watch-paths [paths fun & opts]
+(defn with-watch-paths
+  "A convencience function wrapping `with-watcher`.
+  
+  Watch `paths` and call `fun` with any events. `opts` is simply passed to
+  the `watcher` function.
+
+  See also `watcher` and `with-watcher`."
+  [paths fun & opts]
   (with-watcher (apply watcher paths opts) fun))
