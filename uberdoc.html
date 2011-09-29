@@ -2527,7 +2527,8 @@ $(document).ready(function() {
 
 })
 </script><title>me.panzoo/watcher -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">me.panzoo/watcher</h1><h2 class="project-version">0.0.1</h2><br /><p>Watch paths [recursively].</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.3.0</td></tr><tr><td class="dep-name">org.clojure/core.incubator</td><td class="dotted"><hr /></td><td class="dep-version">0.1.0</td></tr><tr><td class="dep-name">jpathwatch</td><td class="dotted"><hr /></td><td class="dep-version">0.94.0</td></tr></table></div><div class="dependencies"><h3>dev dependencies</h3><table><tr><td class="dep-name">lein-marginalia</td><td class="dotted"><hr /></td><td class="dep-version">0.6.1</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#me.panzoo.watcher">me.panzoo.watcher</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#me.panzoo.watcher" name="me.panzoo.watcher"><h1 class="project-name">me.panzoo.watcher</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.3.0</td></tr><tr><td class="dep-name">org.clojure/core.incubator</td><td class="dotted"><hr /></td><td class="dep-version">0.1.0</td></tr><tr><td class="dep-name">jpathwatch</td><td class="dotted"><hr /></td><td class="dep-version">0.94.0</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#me.panzoo.watcher">me.panzoo.watcher</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#me.panzoo.watcher" name="me.panzoo.watcher"><h1 class="project-name">me.panzoo.watcher</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>A clojureish wrapper round the Watch Service API as implemented in
+  <a href="http://jpathwatch.wordpress.com">jpathwatch</a>.</p>
 </td><td class="codes" /><pre class="brush: clojure">(ns me.panzoo.watcher
   (:use
     [clojure.string :only (join)]
@@ -2538,11 +2539,11 @@ $(document).ready(function() {
      WatchService WatchKey Path Paths FileSystems
      StandardWatchEventKind]
     [name.pachler.nio.file.ext ExtendedWatchEventModifier]))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def ENTRY_CREATE StandardWatchEventKind/ENTRY_CREATE)
-(def ENTRY_DELETE StandardWatchEventKind/ENTRY_DELETE)
-(def ENTRY_MODIFY StandardWatchEventKind/ENTRY_MODIFY)</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(def ^:private ENTRY_CREATE StandardWatchEventKind/ENTRY_CREATE)
+(def ^:private ENTRY_DELETE StandardWatchEventKind/ENTRY_DELETE)
+(def ^:private ENTRY_MODIFY StandardWatchEventKind/ENTRY_MODIFY)</pre></tr><tr><td class="docs">
 </td><td class="codes" /><pre class="brush: clojure">(def ^:private event-kinds
-  (into-array [ENTRY_CREATE ENTRY_DELETE ENTRY_MODIFY]))</pre></tr><tr><td class="docs">
+  (into-array [ENTRY_CREATE ENTRY_DELETE ENTRY_MODIFY]))</pre></tr><tr><td class="docs"><p>Does ACCURATE make a difference on Linux?</p>
 </td><td class="codes" /><pre class="brush: clojure">(def ^:private event-modifiers
   (into-array [ExtendedWatchEventModifier/ACCURATE]))</pre></tr><tr><td class="docs">
 </td><td class="codes" /><pre class="brush: clojure">(defn- path-pieces [path]
@@ -2560,9 +2561,12 @@ $(document).ready(function() {
   (doseq [p (file-seq (File. path))
           :when (.isDirectory p)]
     (watch-path-single w (.getPath p))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn watch-path [w path]
-  ((if (:recursive? w) watch-path-recursive watch-path-single)
-     w path))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(defn watch-path
+  &quot;Register `path` with `watcher`. If `watcher` is recursive and `path` is a
+  directory, all subdirectories will be registered too.&quot;
+  [watcher path]
+  ((if (:recursive? watcher) watch-path-recursive watch-path-single)
+     watcher path))</pre></tr><tr><td class="docs">
 </td><td class="codes" /><pre class="brush: clojure">(defn- unwatch-path-single [{:keys [pathmap keytree]} path]
   (let [pieces (path-pieces path)
         wkey (get-in @keytree (conj pieces :watch-key))]
@@ -2579,10 +2583,16 @@ $(document).ready(function() {
       (.cancel k))
     (swap! pathmap #(apply dissoc % wkeys))
     (swap! keytree #(dissoc-in % pieces))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn unwatch-path [w path]
-  ((if (:recursive? w) unwatch-path-recursive unwatch-path-single)
-     w path))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(defn unwatch-path
+  &quot;Unregister `path` with `watcher`. If `watcher` is recursive and `path`
+  is a directory, all subdirectories will be unregistered too.&quot;
+  [watcher path]
+  ((if (:recursive? watcher) unwatch-path-recursive unwatch-path-single)
+     watcher path))</pre></tr><tr><td class="docs">
 </td><td class="codes" /><pre class="brush: clojure">(defn watcher [paths &amp; opts]
+  &quot;Create a watcher and register `paths` with it. `opts` is a sequence and
+  `:recursive` is the only option to date; if it is present, registration and
+  unregistration of directories is recursive.&quot;
   (let [w {:service (.newWatchService (FileSystems/getDefault))
            :recursive? (:recursive (set opts))
            :pathmap (atom nil)
@@ -2619,11 +2629,24 @@ $(document).ready(function() {
               :when (= :delete (:kind e))]
         (unwatch-path w (:path e)))
       evts*)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn with-watcher [w fun]
-  (loop [evts (events w)]
+</td><td class="codes" /><pre class="brush: clojure">(defn with-watcher
+  &quot;Wait for events from `watcher` and call `fun` with them.
+  `fun`: a function with a single argument of a sequence of events.
+  Events are maps. Path events have the following key-value pairs:
+  `:kind` one of `:create` `:delete` `:modify`
+  `:directory?` a boolean (always false when `:kind` is `:delete`)
+  `:path` a string
+  All other events are simply `{:kind :unknown}`.&quot;
+  [watcher fun]
+  (loop [evts (events watcher)]
     (when (seq evts)
       (fun evts))
-    (recur (events w))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn with-watch-paths [paths fun &amp; opts]
+    (recur (events watcher))))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(defn with-watch-paths
+  &quot;A convencience function wrapping `with-watcher`.
+  Watch `paths` and call `fun` with any events. `opts` is simply passed to
+  the `watcher` function.
+  See also `watcher` and `with-watcher`.&quot;
+  [paths fun &amp; opts]
   (with-watcher (apply watcher paths opts) fun))</pre></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/fogus/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_me.panzoo.watcher">me.panzoo.watcher</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
        SyntaxHighlighter.all()</script></body></html>
